@@ -17,11 +17,17 @@ export class AppController {
     return await this.appService.signin(user);
   }
 
-  @Post('/verify')
+  @Post('/verify-code')
   async verifyWithCode(
     @Query('email') email: string,
     @Query('code') code: string,
   ) {
     return await this.appService.verifyAccount(email, code);
+  }
+
+  @Post('/verify-url')
+  async verifyWithUrl() {
+    // TODO implementar validacion por url
+    // return await this.appService.verifyAccount(email, code);
   }
 }
