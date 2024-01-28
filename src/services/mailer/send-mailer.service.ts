@@ -1,7 +1,6 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { User } from '../../entities/user.entity';
-import { generateCodeHelper } from '../../helpers/generate-code.helper';
 
 @Injectable()
 export class SendMailerService {
@@ -27,8 +26,7 @@ export class SendMailerService {
 
   async sendConfirmationEmail(user: any) {
     try {
-      const { email, fullname } = user;
-      const code = generateCodeHelper();
+      const { email, fullname, authConfirmToken } = user;
 
       await this.mailerService.sendMail({
         to: email,
@@ -37,7 +35,7 @@ export class SendMailerService {
         template: 'confirm',
         context: {
           fullname,
-          code,
+          code: authConfirmToken,
         },
       });
     } catch (error) {

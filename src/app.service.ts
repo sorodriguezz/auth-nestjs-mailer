@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -26,7 +27,7 @@ export class AppService {
       });
 
       if (existEmail) {
-        throw new Error('Este email ya está registrado');
+        throw new BadRequestException('Este email ya está registrado');
       }
 
       const salt = await bcrypt.genSalt();
@@ -55,31 +56,39 @@ export class AppService {
         where: { email: user.email },
       });
 
-      if (foundUser) {
-        if (foundUser.isVerified) {
-          if (await bcrypt.compare(user.password, foundUser.password)) {
-            const payload = { email: user.email };
-            return {
-              token: jwt.sign(payload),
-            };
-          }
-        } else {
-          return new HttpException(
-            'Please varify your account',
-            HttpStatus.UNAUTHORIZED,
-          );
-        }
+      if (!foundUser) {
         return new HttpException(
-          'Incorrect username or password',
-          HttpStatus.UNAUTHORIZED,
+          'Usuario o contraseña incorrectos',
+          HttpStatus.BAD_REQUEST,
         );
       }
-      return new HttpException(
-        'Incorrect username or password',
-        HttpStatus.UNAUTHORIZED,
-      );
-    } catch (e) {
-      return new HttpException(e, HttpStatus.INTERNAL_SERVER_ERROR);
+
+      if (!foundUser.isVerified) {
+        return new HttpException(
+          'Por favor verifique su cuenta',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      const isMatch = await bcrypt.compare(user.password, foundUser.password);
+
+      if (!isMatch) {
+        return new HttpException(
+          'Usuario o contraseña incorrectos',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const payload = {
+        email: user.email,
+        fullname: foundUser.fullname,
+      };
+
+      return {
+        token: jwt.sign(payload),
+      };
+    } catch (error) {
+      return new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -98,14 +107,14 @@ export class AppService {
 
       await this.userRepository.update(
         { email: user.email },
-        { isVerified: true, authConfirmToken: undefined },
+        { isVerified: true, authConfirmToken: '' },
       );
 
       await this.sendMailerService.sendConfirmedEmail(user);
 
       return true;
-    } catch (e) {
-      return new HttpException(e, HttpStatus.INTERNAL_SERVER_ERROR);
+    } catch (error) {
+      throw new InternalServerErrorException(error);
     }
   }
 }
