@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -9,34 +8,45 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
+import { RequestSignupDto } from './dtos/request-signup.dto';
 import { User } from './entities/user.entity';
 import { generateCodeHelper } from './helpers/generate-code.helper';
+import { UserInsert } from './interfaces/user-insert.interface';
 import { SendMailerService } from './services/mailer/send-mailer.service';
+import { CommonProperties } from './properties/common.propertie';
 
 @Injectable()
 export class AppService {
   constructor(
     @InjectRepository(User) private userRepository: Repository<User>,
     private readonly sendMailerService: SendMailerService,
+    private jwtService: JwtService,
   ) {}
 
-  async signup(user: User): Promise<boolean> {
+  async signup({
+    email,
+    fullname,
+    password,
+  }: RequestSignupDto): Promise<boolean | HttpException> {
     try {
       const existEmail = await this.userRepository.exists({
-        where: { email: user.email },
+        where: { email: email },
       });
 
       if (existEmail) {
-        throw new BadRequestException('Este email ya está registrado');
+        return new HttpException(
+          'Este email ya está registrado',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       const salt = await bcrypt.genSalt();
-      const hash = await bcrypt.hash(user.password, salt);
+      const hash = await bcrypt.hash(password, salt);
       const code = generateCodeHelper().toString();
 
-      const reqBody = {
-        fullname: user.fullname,
-        email: user.email,
+      const reqBody: UserInsert = {
+        fullname: fullname,
+        email: email,
         password: hash,
         authConfirmToken: code,
       };
@@ -46,11 +56,58 @@ export class AppService {
 
       return true;
     } catch (error) {
+      return new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async verifyAccount(
+    email: string,
+    code: string,
+  ): Promise<boolean | HttpException> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { email },
+      });
+
+      if (!user?.authConfirmToken) {
+        return new HttpException('Email incorrecto', HttpStatus.BAD_REQUEST);
+      }
+
+      if (user.attempts >= CommonProperties.USER_ATTEMPTS) {
+        return new HttpException(
+          'Ha excedido el número de intentos',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      await this.userRepository.update(
+        { email: user.email },
+        { attempts: user.attempts + CommonProperties.USER_ATTEMPTS_AGG },
+      );
+
+      if (user.authConfirmToken !== code) {
+        return new HttpException('Código incorrecto', HttpStatus.UNAUTHORIZED);
+      }
+
+      await this.userRepository.update(
+        { email: user.email },
+        {
+          isVerified: true,
+          authConfirmToken: '',
+          isActive: true,
+          attempts: null,
+        },
+      );
+
+      await this.sendMailerService.sendConfirmedEmail(user);
+
+      return true;
+    } catch (error) {
       throw new InternalServerErrorException(error);
     }
   }
 
-  async signin(user: User, jwt: JwtService): Promise<any> {
+  async signin(user: User): Promise<any> {
     try {
       const foundUser = await this.userRepository.findOne({
         where: { email: user.email },
@@ -85,36 +142,10 @@ export class AppService {
       };
 
       return {
-        token: jwt.sign(payload),
+        token: this.jwtService.sign(payload),
       };
     } catch (error) {
       return new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  async varifyAccount(code: string, email: string): Promise<any> {
-    try {
-      const user = await this.userRepository.findOne({
-        where: { authConfirmToken: code, email },
-      });
-
-      if (!user) {
-        return new HttpException(
-          'Codigo no encontrado o email incorrecto',
-          HttpStatus.UNAUTHORIZED,
-        );
-      }
-
-      await this.userRepository.update(
-        { email: user.email },
-        { isVerified: true, authConfirmToken: '' },
-      );
-
-      await this.sendMailerService.sendConfirmedEmail(user);
-
-      return true;
-    } catch (error) {
-      throw new InternalServerErrorException(error);
     }
   }
 }

@@ -10,21 +10,27 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: number;
 
-  @Column()
+  @Column({ name: 'fullname' })
   fullname: string;
 
-  @Column({ unique: true })
+  @Column({ name: 'email', unique: true })
   email: string;
 
-  @Column()
+  @Column({ name: 'password' })
   password: string;
 
-  @Column({ select: false, nullable: true })
+  @Column({ name: 'auth_confirm_token', nullable: true })
   authConfirmToken: string;
 
-  @Column({ default: false, nullable: true })
+  @Column({ name: 'attempts', default: 0, nullable: true })
+  attempts: number;
+
+  @Column({ name: 'is_verified', default: false, nullable: true })
   isVerified: boolean;
 
-  @CreateDateColumn()
+  @Column({ name: 'is_active', default: false, nullable: true })
+  isActive: boolean;
+
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

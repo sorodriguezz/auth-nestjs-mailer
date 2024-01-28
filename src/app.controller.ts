@@ -1,27 +1,27 @@
 import { Body, Controller, Post, Query } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { AppService } from './app.service';
+import { RequestSignupDto } from './dtos/request-signup.dto';
 import { User } from './entities/user.entity';
 
 @Controller()
 export class AppController {
-  constructor(
-    private readonly appService: AppService,
-    private jwtService: JwtService,
-  ) {}
+  constructor(private readonly appService: AppService) {}
 
   @Post('/signup')
-  async Signup(@Body() user: User) {
-    return await this.appService.signup(user);
+  async signup(@Body() request: RequestSignupDto) {
+    return await this.appService.signup(request);
   }
 
   @Post('/signin')
-  async Signin(@Body() user: User) {
-    return await this.appService.signin(user, this.jwtService);
+  async signin(@Body() user: User) {
+    return await this.appService.signin(user);
   }
 
   @Post('/verify')
-  async Varify(@Query('email') email: string, @Query('code') code: string) {
-    return await this.appService.varifyAccount(code, email);
+  async verifyWithCode(
+    @Query('email') email: string,
+    @Query('code') code: string,
+  ) {
+    return await this.appService.verifyAccount(email, code);
   }
 }
